@@ -1,0 +1,223 @@
+import pygame
+import neat
+import time
+import os
+import random
+pygame.font.init()
+
+WIN_WIDTH = 576
+WIN_HEIGHT = 800
+
+FOTOS_PAJAROS = [pygame.transform.scale2x(pygame.image.load(os.path.join('imgs', 'bird1.png'))),
+                pygame.transform.scale2x(pygame.image.load(os.path.join('imgs', 'bird2.png'))),
+                pygame.transform.scale2x(pygame.image.load(os.path.join('imgs', 'bird3.png')))]
+
+FOTO_TUBO = pygame.transform.scale2x(pygame.image.load(os.path.join('imgs', 'pipe.png')))
+FOTO_PISO = pygame.transform.scale2x(pygame.image.load(os.path.join('imgs', 'base.png')))
+FOTO_FONDO = pygame.transform.scale2x(pygame.image.load(os.path.join('imgs', 'bg.png')))
+STAT_FONT= pygame.font.SysFont("Comicsans",50)
+
+class Pajaro:
+    FOTOS = FOTOS_PAJAROS
+    ROTACION_MAX = 25
+    VEL_ROTACION = 20
+    TIEMPO_ANIMADO = 5
+
+    def __init__(self,x,y):
+        self.x = x
+        self.y = y
+        self.rotacion = 0
+        self.conteo = 0
+        self.vel = 0
+        self.height = self.y
+        self.img_count = 0
+        self.img = self.FOTOS[0]
+
+    def saltar(self):
+        self.vel = -10.5
+        self.conteo = 0
+        self.height = self.y
+
+    def move(self):
+        self.conteo += 1
+
+        d = self.vel * self.conteo + 1.5*self.conteo**2
+        if d >= 16:
+            d = 16
+        
+        if d < 0:
+            d -=2
+
+        self.y = self.y + d
+
+        if d < 0 or self.y < self.height + 50:
+            if self.rotacion < self.ROTACION_MAX:
+                self.rotacion = self.ROTACION_MAX
+
+        else:
+            if self.rotacion > -90:
+                self.tilt -= self.VEL_ROTACION
+
+    def dibujar(self,ventana):
+        self.img_count += 1
+
+        if self.img_count < self.TIEMPO_ANIMADO:
+            self.img = self.FOTOS[0]
+        elif self.img_count < self.TIEMPO_ANIMADO*2:
+            self.img = self.FOTOS[1]
+        elif self.img_count < self.TIEMPO_ANIMADO*3:
+            self.img = self.FOTOS[2]
+        elif self.img_count < self.TIEMPO_ANIMADO*4:
+            self.img = self.FOTOS[1]
+        elif self.img_count == self.TIEMPO_ANIMADO*4 +1:
+            self.img = self.FOTOS[0]
+            self.img_count = 0
+        
+        if self.rotacion <= -80:
+            self.img = self.FOTOS[1]
+            self.img_count = self.TIEMPO_ANIMADO*2
+        
+        imagen_rotada = pygame.transform.rotate(self.img, self.rotacion)
+        forma_nueva = imagen_rotada.get_rect(center=self.img.get_rect(topleft = (self.x, self.y)).center)
+        ventana.blit(imagen_rotada, forma_nueva.topleft)
+
+    def get_mask(self):
+        return pygame.mask.from_surface(self.img)
+
+class Pipe:
+
+    espacio=200 # espacio entre las tuberias
+    vel= 5
+
+    def __init__(self,x):
+        self.x=x
+        self.altura=0
+        self.espacio=200
+
+        self.arriba=0 #donde la parte de arriba de la tuberia se va a dibujar
+        self.abajo=0 #donde la parte de abajo de la tuberia se va a dibujar
+        self.PIPE_arriba= pygame.transform.flip(FOTO_TUBO,False,True) #como la foto de la tuberia esta mirando para arriba, uso .flip() para darla vuelta y que la tuberia de arriba mire para abajo
+        self.PIPE_abajo= FOTO_TUBO #en este caso la tuberia esta mirando para donden tiene que mirar, que es para arriba
+
+        self.passed=False #determina si choco o no
+        self.set_height() #define donde esta la parte de arriba y de abajo de la tuberia y que tan alto es
+    
+    def set_height(self):
+        self.altura= random.randrange(50,450) #doy el rango de en que valores se puede encontrar la tuberia, es random
+        self.arriba=self.altura-self.PIPE_arriba.get_height() #determina donde va a terminar la tuberia
+        self.abajo= self.altura+self.espacio
+    
+    def move(self):
+        self.x-= self.vel #todo el tiempo que llamamos a este metodo, la tuberia se mueve para a derecha
+    
+    def draw(self,ventana):
+        ventana.blit(self.PIPE_arriba,(self.x,self.arriba)) 
+        ventana.blit(self.PIPE_abajo,(self.x,self.abajo)) #dibuja las tuberias
+    
+    def collide(self,pajaro):
+        pajaro_mask=pajaro.get_mask() #el metodo get_mask() es como un metodo de get_rect pero mas preciso. Solo choca si efectivamente chocan los pixeles y no el hitbox
+        arriba_mask=pygame.mask.from_surface(self.PIPE_arriba)
+        abajo_mask= pygame.mask.from_surface(self.PIPE_abajo)
+        
+        #calculo que tan lejos estan estas mask entre si
+        arriba_offset= (self.x-pajaro.x,self.arriba-round(pajaro.y))
+        abajo_offset=(self.x-pajaro.x,self.abajo-round(pajaro.y))
+
+        b_punto= pajaro_mask.overlap(abajo_mask, abajo_offset) #nos dice el punto de choque entre el pajaro y la tuberia de abajo, si no choca nos retorna None
+        t_punto= pajaro_mask.overlap(arriba_mask, arriba_offset) #lo mismo que antes pero con la tuberia de arriba
+
+        if t_punto or b_punto:  # si t_punto o b_punto tiene un valor (!=None) 
+            return True #choca con el objeto
+        else:
+            return False #si t_punto y b_punto son None, retorna False y no choca
+        
+class Piso:
+    vel=5 #velocidad igual a la tuberia
+    ancho=FOTO_PISO.get_width() #igual de ancho que la foto
+    IMG= FOTO_PISO
+
+    def __init__(self,y): 
+        self.y=y
+        self.x1=0
+        self.x2=self.ancho
+    
+    def move(self):
+        
+        self.x1-=self.vel 
+        self.x2-=self.vel
+
+        if self.x1 +self.ancho <0:
+            self.x1=self.x2+self.ancho  
+        
+        if self.x2 +self.ancho <0:
+            self.x2=self.x1+self.ancho #son basicamente dos imagenes y estos dos if lo que hace es que mueve estas dos bases de la misma forma sin dejar espacios, como si fuese solo una imagen.
+            # cuando la primer imagen llega al final de la pantalla, mueve a la primer imagen hacia atras de la segunda, haciendo un ciclo en el que siempre hay un piso sin importar cuanto se avance
+    
+    def draw(self,ventana):  #dibuja el piso
+        ventana.blit(self.IMG, (self.x1,self.y))
+        ventana.blit(self.IMG, (self.x2,self.y))
+
+
+def dibujar_ventana(ventana,pajaro,pipes,piso,score):
+    ventana.blit(FOTO_FONDO, (0,0))
+
+    for pipe in pipes:
+        pipe.draw(ventana) #defino donde se dibuja
+    
+    text=STAT_FONT.render("Score: "+ str(score),1, (255,255,255))
+    ventana.blit(text,(WIN_WIDTH-10-text.get_width(),10)) #no importa que tan grande sea el codigo se va a seguir mostrando en la ventana
+
+    piso.draw(ventana)
+    pajaro.dibujar(ventana)
+    pygame.display.update()
+
+def main():
+    pajaro = Pajaro(230,350)
+    piso=Piso(730)
+    pipes=[Pipe(700)]
+    ventana = pygame.display.set_mode((WIN_WIDTH, WIN_HEIGHT))
+    tiempo= pygame.time.Clock()
+
+    score=0
+
+    run = True
+    while run:
+        tiempo.tick(60) #fija a 30 fps
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                run = False
+
+
+        add_pipe=False
+        sacar= []
+        for pipe in pipes:
+            if pipe.collide(pajaro):
+                pass
+            if pipe.x+pipe.PIPE_arriba.get_width() < 0:
+                sacar.append(pipe)
+            
+            if not pipe.passed and pipe.x < pajaro.x: #chequea si el pajaro ya paso la tuberia
+                pipe.passed=True
+                add_pipe=True
+
+            pipe.move()
+        
+        if add_pipe:
+
+            score +=1
+            pipes.append(Pipe(700))
+
+        for el in sacar:
+            pipes.remove(el) #elimina las tuberias que ya pasaron
+
+        if pajaro.y + pajaro.img.get_height() >=730:
+            pass
+
+        piso.move() #muevo el piso
+
+        dibujar_ventana(ventana, pajaro,pipes,piso,score)     
+    
+    pygame.quit()
+    quit()
+
+main()
