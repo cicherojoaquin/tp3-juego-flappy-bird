@@ -5,6 +5,14 @@ import os
 import random
 pygame.font.init()
 
+pygame.mixer.init()  # <<< AGREGA ESTO PARA USAR SONIDO !!!  
+
+# sonidos
+SONIDO_SALTO = pygame.mixer.Sound(os.path.join('audio', 'jump.mp3'))  # sonido del aleteo !!!
+pygame.mixer.music.load(os.path.join('audio', 'music.wav'))  # música de fondo 
+pygame.mixer.music.play(-1)  # -1 = loop infinito 
+pygame.mixer.music.set_volume(0.3)  # volumen bajo para no molestar !!!
+
 WIN_WIDTH = 576
 WIN_HEIGHT = 800
 
@@ -56,7 +64,7 @@ class Pajaro:
 
         else:
             if self.rotacion > -90:
-                self.tilt -= self.VEL_ROTACION
+                self.rotacion -= self.VEL_ROTACION
 
     def dibujar(self,ventana):
         self.img_count += 1
@@ -86,13 +94,13 @@ class Pajaro:
 
 class Pipe:
 
-    espacio=200 # espacio entre las tuberias
+    espacio= 200 # espacio de ancho entre las tuberias
     vel= 5
 
     def __init__(self,x):
         self.x=x
         self.altura=0
-        self.espacio=200
+        self.espacio = 200
 
         self.arriba=0 #donde la parte de arriba de la tuberia se va a dibujar
         self.abajo=0 #donde la parte de abajo de la tuberia se va a dibujar
@@ -170,6 +178,13 @@ def dibujar_ventana(ventana,pajaro,pipes,piso,score):
     piso.draw(ventana)
     pajaro.dibujar(ventana)
     pygame.display.update()
+    
+def reset_game():
+    pajaro = Pajaro(230, 350)
+    piso = Piso(730)
+    pipes = [Pipe(700)]
+    score = 0
+    return pajaro, piso, pipes, score  # <<< devuelve nuevos objetos !!!
 
 def main():
     pajaro = Pajaro(230,350)
@@ -178,21 +193,32 @@ def main():
     ventana = pygame.display.set_mode((WIN_WIDTH, WIN_HEIGHT))
     tiempo= pygame.time.Clock()
 
+    pajaro, piso, pipes, score = reset_game()  # <<< INICIO NORMAL !!!
+    pygame.mixer.music.play(-1)  # vuelve a arrancar la música de fondo !!!
+
+
     score=0
 
     run = True
     while run:
-        tiempo.tick(60) #fija a 30 fps
+        tiempo.tick(40) #fija a 40 fps
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
+        
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE: #si se aprieta la tecla espacio:
+                    pajaro.saltar()
+                    SONIDO_SALTO.play()  #  AGREGA SONIDO DE ALETEO 
 
 
         add_pipe=False
         sacar= []
         for pipe in pipes:
             if pipe.collide(pajaro):
-                pass
+                pygame.time.delay(300)    # con time.delay tarda un poco en reiniciarse el juego no lo hace de una                                       
+                pajaro, piso, pipes, score = reset_game() #llamo a la funcion que resetea el juego                        
+                break   
             if pipe.x+pipe.PIPE_arriba.get_width() < 0:
                 sacar.append(pipe)
             
@@ -211,13 +237,25 @@ def main():
             pipes.remove(el) #elimina las tuberias que ya pasaron
 
         if pajaro.y + pajaro.img.get_height() >=730:
-            pass
+            pygame.time.delay(300)                         
+            pajaro, piso, pipes, score = reset_game()      #  si choca con el piso reinicia
+        
+        pajaro.move()
+
+        if pajaro.y < 0:                       #  si sube más arriba de la pantalla
+            pajaro.y = 0                       # lo frena justo en el borde de arriba
+            pajaro.vel = 0                     # le quita la velocidad para que no siga subiendo
+            pajaro.conteo = 0                  #  resetea el contador de movimiento
+            pajaro.height = pajaro.y           #  corrige la referencia de altura del salto
 
         piso.move() #muevo el piso
 
         dibujar_ventana(ventana, pajaro,pipes,piso,score)     
     
     pygame.quit()
+    quit()
+
+main()
     quit()
 
 main()
