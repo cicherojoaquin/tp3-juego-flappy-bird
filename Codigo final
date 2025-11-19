@@ -1,0 +1,414 @@
+import pygame
+import time
+import os
+import random
+pygame.font.init()
+
+pygame.mixer.init()  # <<< AGREGA ESTO PARA USAR SONIDO !!!  
+
+# sonidos
+SONIDO_SALTO = pygame.mixer.Sound(os.path.join('audio', 'jump.mp3'))  # sonido del aleteo!!!
+pygame.mixer.music.load(os.path.join('audio', 'music.wav'))  # música de fondo 
+pygame.mixer.music.play(-1)  # -1 = loop infinito 
+pygame.mixer.music.set_volume(0.3)  # volumen bajo para no molestar!!!
+
+WIN_WIDTH = 576
+WIN_HEIGHT = 800
+
+FOTOS_PAJAROS = [pygame.transform.scale2x(pygame.image.load(os.path.join('imgs', 'bird1.png'))),
+                pygame.transform.scale2x(pygame.image.load(os.path.join('imgs', 'bird2.png'))),
+                pygame.transform.scale2x(pygame.image.load(os.path.join('imgs', 'bird3.png')))]
+
+FOTO_TUBO = pygame.transform.scale2x(pygame.image.load(os.path.join('imgs', 'pipe.png')))
+FOTO_PISO = pygame.transform.scale2x(pygame.image.load(os.path.join('imgs', 'base.png')))
+FOTO_FONDO = pygame.transform.scale2x(pygame.image.load(os.path.join('imgs', 'bg.png')))
+STAT_FONT= pygame.font.SysFont("Comicsans",50)
+
+class Pajaro:
+    FOTOS = FOTOS_PAJAROS
+    ROTACION_MAX = 25
+    VEL_ROTACION = 20
+    TIEMPO_ANIMADO = 5
+
+    def __init__(self,x,y, genoma=None):
+        self.x = x
+        self.y = y
+        self.rotacion = 0
+        self.conteo = 0
+        self.vel = 0
+        self.height = self.y
+        self.img_count = 0
+        self.img = self.FOTOS[0]
+        self.genoma = genoma
+        self.vivo = True    
+        self.tiempo_vivo = 0
+
+    def saltar(self):
+        self.vel = -10.5
+        self.conteo = 0
+        self.height = self.y
+
+    def move(self):
+        self.conteo += 1
+
+        d = self.vel * self.conteo + 1.5*self.conteo**2
+        if d >= 16:
+            d = 16
+        
+        if d < 0:
+            d -=2
+
+        self.y = self.y + d
+
+        if d < 0 or self.y < self.height + 50:
+            if self.rotacion < self.ROTACION_MAX:
+                self.rotacion = self.ROTACION_MAX
+
+        else:
+            if self.rotacion > -90:
+                self.rotacion -= self.VEL_ROTACION
+
+    def dibujar(self,ventana):
+        self.img_count += 1
+
+        if self.img_count < self.TIEMPO_ANIMADO:
+            self.img = self.FOTOS[0]
+        elif self.img_count < self.TIEMPO_ANIMADO*2:
+            self.img = self.FOTOS[1]
+        elif self.img_count < self.TIEMPO_ANIMADO*3:
+            self.img = self.FOTOS[2]
+        elif self.img_count < self.TIEMPO_ANIMADO*4:
+            self.img = self.FOTOS[1]
+        elif self.img_count == self.TIEMPO_ANIMADO*4 +1:
+            self.img = self.FOTOS[0]
+            self.img_count = 0
+        
+        if self.rotacion <= -80:
+            self.img = self.FOTOS[1]
+            self.img_count = self.TIEMPO_ANIMADO*2
+        
+        imagen_rotada = pygame.transform.rotate(self.img, self.rotacion)
+        forma_nueva = imagen_rotada.get_rect(center=self.img.get_rect(topleft = (self.x, self.y)).center)
+        ventana.blit(imagen_rotada, forma_nueva.topleft)
+
+    def get_mask(self):
+        return pygame.mask.from_surface(self.img)
+
+class Pipe:
+
+    espacio= 200 # espacio de ancho entre las tuberias
+    vel= 5
+
+    def __init__(self,x):
+        self.x=x
+        self.altura=0
+        self.espacio = 200
+
+        self.arriba=0 #donde la parte de arriba de la tuberia se va a dibujar
+        self.abajo=0 #donde la parte de abajo de la tuberia se va a dibujar
+        self.PIPE_arriba= pygame.transform.flip(FOTO_TUBO,False,True) #como la foto de la tuberia esta mirando para arriba, uso .flip() para darla vuelta y que la tuberia de arriba mire para abajo
+        self.PIPE_abajo= FOTO_TUBO #en este caso la tuberia esta mirando para donden tiene que mirar, que es para arriba
+
+        self.passed=False #determina si choco o no
+        self.set_height() #define donde esta la parte de arriba y de abajo de la tuberia y que tan alto es
+    
+    def set_height(self):
+        self.altura= random.randrange(50,450) #doy el rango de en que valores se puede encontrar la tuberia, es random
+        self.arriba=self.altura-self.PIPE_arriba.get_height() #determina donde va a terminar la tuberia
+        self.abajo= self.altura+self.espacio
+    
+    def move(self):
+        self.x-= self.vel #todo el tiempo que llamamos a este metodo, la tuberia se mueve para a derecha
+    
+    def draw(self,ventana):
+        ventana.blit(self.PIPE_arriba,(self.x,self.arriba)) 
+        ventana.blit(self.PIPE_abajo,(self.x,self.abajo)) #dibuja las tuberias
+    
+    def collide(self,pajaro):
+        pajaro_mask=pajaro.get_mask() #el metodo get_mask() es como un metodo de get_rect pero mas preciso. Solo choca si efectivamente chocan los pixeles y no el hitbox
+        arriba_mask=pygame.mask.from_surface(self.PIPE_arriba)
+        abajo_mask= pygame.mask.from_surface(self.PIPE_abajo)
+        
+        #calculo que tan lejos estan estas mask entre si
+        arriba_offset= (self.x-pajaro.x,self.arriba-round(pajaro.y))
+        abajo_offset=(self.x-pajaro.x,self.abajo-round(pajaro.y))
+
+        b_punto= pajaro_mask.overlap(abajo_mask, abajo_offset) #nos dice el punto de choque entre el pajaro y la tuberia de abajo, si no choca nos retorna None
+        t_punto= pajaro_mask.overlap(arriba_mask, arriba_offset) #lo mismo que antes pero con la tuberia de arriba
+
+        if t_punto or b_punto:  # si t_punto o b_punto tiene un valor (!=None) 
+            return True #choca con el objeto
+        else:
+            return False #si t_punto y b_punto son None, retorna False y no choca
+        
+class Piso:
+    vel=5 #velocidad igual a la tuberia
+    ancho=FOTO_PISO.get_width() #igual de ancho que la foto
+    IMG= FOTO_PISO
+
+    def __init__(self,y): 
+        self.y=y
+        self.x1=0
+        self.x2=self.ancho
+    
+    def move(self):
+        
+        self.x1-=self.vel 
+        self.x2-=self.vel
+
+        if self.x1 +self.ancho <0:
+            self.x1=self.x2+self.ancho  
+        
+        if self.x2 +self.ancho <0:
+            self.x2=self.x1+self.ancho #son basicamente dos imagenes y estos dos if lo que hace es que mueve estas dos bases de la misma forma sin dejar espacios, como si fuese solo una imagen.
+            # cuando la primer imagen llega al final de la pantalla, mueve a la primer imagen hacia atras de la segunda, haciendo un ciclo en el que siempre hay un piso sin importar cuanto se avance
+    
+    def draw(self,ventana):  #dibuja el piso
+        ventana.blit(self.IMG, (self.x1,self.y))
+        ventana.blit(self.IMG, (self.x2,self.y))
+
+
+class GenomaPajaro: # Con esto se hace el genoma del pajaro 
+    def __init__(self, pesos=None, rango_min=-1.0, rango_max=1.0):
+        self.pesos=pesos
+        self.rango_min = rango_min # Va ser -1
+        self.rango_max = rango_max # Va ser 1
+        self.aptitud= 0.0 # No se define en el init ya que el pajaro no nace con aptitud sino que se calcula despues de jugar
+        if pesos is None:
+            self.pesos= [] # Lista vacia que se la van sumando los pesos
+            for i in range(6): # Itera 6 veces porque hay 6 genes (W0 hasta W5)
+                numero_aleatorio= random.uniform(rango_min,rango_max) # Uniform elige desde el rango min al rango max con igual posibilidades
+                self.pesos.append(numero_aleatorio)
+        else:
+            self.pesos=list(pesos)
+    
+    def aleteo_ia(self, cambio_y, cambio_x, velocidad_y): # Esto es como decide si aletear o no el pajaro, sin estimulacion externa (inteligente)
+        w0,w1,w2,w3,w4,w5=self.pesos # Desempaqueta los 5 "genes" que tiene el pajaro y son los que van a evolucionar
+        cambio_y_cuadrado= cambio_y**2
+        cambio_x_cuadrado= cambio_x**2
+        formula= (w0 + w1*cambio_y + w2*cambio_y_cuadrado + w3*cambio_x + w4*cambio_x_cuadrado + w5*velocidad_y)
+        return formula>0  # Si cumple, es TRUE y el pajaro aletea, sino es FALSE y el pajaro no aletea}
+    
+class Algoritmo_Gen:
+    def __init__(self, poblacion=100, probabilad_mutacion=0.05, rango_min=-1.0, rango_max=1.0):
+        self.tam_poblacion= poblacion 
+        self.probabilidad_mutacion= probabilad_mutacion # Probabilad de que cada gen mute
+        self.rango_min = rango_min
+        self.rango_max = rango_max 
+        self.poblacion=[] # Lista que guarda los genomas de cada uno de los 100 pajaros [genoma1, genoma2.... genoma100]
+        self.generacion =0 # Esto va ser el contador de generaciones y empieza en 0
+    
+    def poblacion_inicial(self): # Crea la primera poblacion, generacion 0
+        self.poblacion=[]
+        for i in range(self.tam_poblacion): # Itera la cantidad de veces que sea la poblacion del pajaro (100)
+            genoma= GenomaPajaro(rango_min=self.rango_min, rango_max=self.rango_max) # Esto crea el genoma individual del pajaro con los valores minimos y maximos para cada gen (w)
+            self.poblacion.append(genoma) # Agrega el genoma del pajaro a la lista de genomas 
+        self.generacion=0
+    
+    def aptitud(self, lista_aptitudes): # Asigna la aptitud a cada genoma de la poblacion
+        limite= min(len(self.poblacion), len(lista_aptitudes))
+        for i in range(limite): # Recorre la lista de pajaros 1 por 1 y le otorga la aptitud correspondiente
+            genoma= self.poblacion[i]
+            valor_aptitud=lista_aptitudes[i]
+            genoma.aptitud= valor_aptitud
+    
+    def mas_aptos(self, n=10):
+        lista_aptitud_organizada= sorted(self.poblacion, key=lambda genoma: genoma.aptitud, reverse= True) # Ordena la poblacion de pajaros del mas apto al menos apto (reverse) usando
+        mejores_genomas=lista_aptitud_organizada[:n] # Genera lista con los mejores 10 pajaros en cuanto a aptitud
+        return mejores_genomas # Devuelve la lista de diez pajaros con los mejores genomas
+
+    def cruzar_genomas(self, padre1, padre2):
+        nuevos_pesos=[] # Lista donde se guardan los nuevos w de la siguiente generacion de pajaros 
+        for w_padre1, w_padre2 in zip(padre1.pesos, padre2.pesos):
+            if random.random() < 0.5: # Elige un numero entre 0 y 1, y dependiendo el valor, toma el valor w (gen) del padre correspondiente
+                nuevos_pesos.append(w_padre1) 
+            else:
+                nuevos_pesos.append(w_padre2)
+        
+
+        hijo = GenomaPajaro(pesos=nuevos_pesos, rango_min=self.rango_min, rango_max=self.rango_max) # Es el hijo con el nuevo genoma creado
+        return hijo # Devuelve el pajaro 'hijo'
+    
+    def nueva_generacion(self):
+        mejores_genomas=self.mas_aptos(n=10)
+        nueva_poblacion=[]
+        for genoma in mejores_genomas:
+            nueva_poblacion.append(genoma) # Agrega directamente los 10 mejores pajaros a la nueva poblacion}
+
+        cantidad_mejores_genomas = len(mejores_genomas)
+        indice=0 # Indica como se van a dar los cruces, 0-1 en indice 0 y asi etc hasta 9-10 en indice 4
+
+        while len(nueva_poblacion)<self.tam_poblacion:
+            padre1= mejores_genomas[indice]
+            padre2= mejores_genomas[indice+1]
+            hijo= self.cruzar_genomas(padre1, padre2) # Genera el hijo usando posibles 'genes' de los padres
+
+            self.mutacion_del_genoma(hijo) # Le aplica la posible mutacion al hijo
+
+            nueva_poblacion.append(hijo) # Agrega hijos hasta que el numero de pajaros llegue a 100
+            indice +=2 # Suma 2 al indice y se cruzan los siguientes dos padres
+            if indice >= cantidad_mejores_genomas - 1:
+                indice = 0 # Vuelven a empezar los cruces 
+        
+        self.poblacion=nueva_poblacion # Esta es la nueva poblacion con los 100 pajaros 'mas aptos'
+        self.generacion+=1 # Se suma uno al contador de generaciones 
+    
+    def mutacion_del_genoma(self, genoma):
+        for i in range(len(genoma.pesos)):
+            if random.random() < self.probabilidad_mutacion: # Elige un valor entre 0.0 y 1.0, y si es menor a la prob de mutacion (0.05), muta el gen
+                cambio= random.uniform(-1.0,1.0) # El gen muta y es cualquier valor entre los rangos de w posibles
+                genoma.pesos[i]=cambio
+
+
+def dibujar_ventana(ventana,pajaro,pipes,piso,score):
+    ventana.blit(FOTO_FONDO, (0,0))
+
+    for pipe in pipes:
+        pipe.draw(ventana) #defino donde se dibuja
+    
+    text=STAT_FONT.render("Score: "+ str(score),1, (255,255,255))
+    ventana.blit(text,(WIN_WIDTH-10-text.get_width(),10)) #no importa que tan grande sea el codigo se va a seguir mostrando en la ventana
+
+    piso.draw(ventana)
+    pajaro.dibujar(ventana)
+    pygame.display.update()
+    
+def reset_game():
+    pajaro = Pajaro(230, 350)
+    piso = Piso(730)
+    pipes = [Pipe(700)]
+    score = 0
+    return pajaro, piso, pipes, score  # <<< devuelve nuevos objetos !!!
+
+def crear_pajaros_desde_genomas(lista_genomas):
+    "Esta funcion crea los pajaros con las condiciones anteriores"
+    pajaros = []
+    for genoma in lista_genomas:
+        pajaro = Pajaro(230, 350, genoma=genoma)
+        pajaros.append(pajaro)
+    return pajaros
+
+def main():
+    
+    ventana = pygame.display.set_mode((WIN_WIDTH, WIN_HEIGHT))
+    tiempo= pygame.time.Clock()
+    piso=Piso(730)
+    pipes=[Pipe(700)]
+
+    algoritmo= Algoritmo_Gen() # Crea el algoritmo genetico 
+    algoritmo.poblacion_inicial()
+
+    pajaros = crear_pajaros_desde_genomas(algoritmo.poblacion) # Crea los 100 pajaros fisicos desde los genomas
+
+    pygame.mixer.music.play(-1)  # vuelve a arrancar la música de fondo !!!
+
+
+    # Hace que haya un maximo de 6 generaciones y corran las 6 
+
+    for numero_generacion in range(6):
+        print(f"Empieza generacion {numero_generacion}")
+
+        piso= Piso(730)
+        pipes= [Pipe(700)]
+
+        # Crea los 100 pajaros desde los genomas que toquen actuales
+
+        pajaros= crear_pajaros_desde_genomas(algoritmo.poblacion)
+
+        generacion_terminada = False # Esto corta el while del juego 
+
+
+    # Empiza el bucle de juego para la generacion que toque
+        while not generacion_terminada:
+            tiempo.tick(40) #fija a 40 fps
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    quit()
+
+      #  Tuberia para que los pajaros decidan si aletear o no       
+        
+            pipe_obj = None
+            for pipe in pipes:
+                if pipe.x + pipe.PIPE_arriba.get_width() > 230:  # delante del pájaro
+                    pipe_obj = pipe
+                    break
+    
+    # Recorre los 100 pajaros y va contando cuantos quedan vivos
+
+            vivos=0
+            for pajaro in pajaros:
+                if pajaro.vivo:
+                    vivos+=1
+
+                # Para la IA ahora 
+
+                cambio_y= pipe_obj.altura - pajaro.y
+                cambio_x= pipe_obj.x - pajaro.x
+                velocidad_y= pajaro.vel
+
+                if pajaro.genoma.aleteo_ia(cambio_y,cambio_x, velocidad_y):
+                    pajaro.saltar()
+                    SONIDO_SALTO.play()
+
+                # Mueve y suma tiempo vivo del pajaro
+                pajaro.move()
+                pajaro.tiempo_vivo +=1
+
+                # Ahora chequeamos si muere
+
+                if pajaro.y + pajaro.img.get_height() >= 730: # Si choca con el piso
+                    pajaro.vivo= False
+                if pajaro.y < 0: # Si choca con el techo
+                    pajaro.vivo= False
+                if pipe_obj.collide(pajaro): # Si choca con tuberia
+                    pajaro.vivo= False
+                
+            if vivos==0:
+                    generacion_terminada=True
+
+            # Movimiento de tuberia
+
+            add_pipe=False
+            sacar= []
+            for pipe in pipes:
+                pipe.move()
+            
+            if pipe.x+pipe.PIPE_arriba.get_width() < 0:
+                sacar.append(pipe)
+            
+            if not pipe.passed and pipe.x < 230: #chequea si el pajaro ya paso la tuberia
+                pipe.passed=True
+                add_pipe=True
+
+            if add_pipe:
+                pipes.append(Pipe(700))
+
+            for el in sacar:
+                pipes.remove(el)  #Elimina las tuberias que ya pasaron
+
+            # Dibujo de todo 
+
+            ventana.blit(FOTO_FONDO, (0,0))
+            for pipe in pipes:
+                pipe.draw(ventana)
+            piso.move()
+            piso.draw(ventana)
+
+            for pajaro in pajaros:
+                if pajaro.vivo:
+                    pajaro.dibujar(ventana)
+
+            pygame.display.update()
+
+    # Calculo de aptitudes cuando mueren los pajaros y la evolucion
+
+            lista_aptitudes= [p.tiempo_vivo for p in pajaros]
+            algoritmo.aptitud(lista_aptitudes)
+            algoritmo.nueva_generacion()
+
+        # Cuando terminan las 6 generaciones
+        pygame.quit()
+        
+if __name__ == "__main__":
+    main()
