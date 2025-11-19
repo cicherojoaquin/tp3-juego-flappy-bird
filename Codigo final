@@ -369,17 +369,17 @@ def main():
 
             # Movimiento de tuberia
 
-            add_pipe=False
-            sacar= []
+            add_pipe = False
+            sacar = []
             for pipe in pipes:
                 pipe.move()
             
-            if pipe.x+pipe.PIPE_arriba.get_width() < 0:
-                sacar.append(pipe)
-            
-            if not pipe.passed and pipe.x < 230: #chequea si el pajaro ya paso la tuberia
-                pipe.passed=True
-                add_pipe=True
+                if pipe.x + pipe.PIPE_arriba.get_width() < 0:
+                    sacar.append(pipe)
+                
+                if not pipe.passed and pipe.x < 230:  # chequea si la tubería ya pasó
+                    pipe.passed = True
+                    add_pipe = True
 
             if add_pipe:
                 pipes.append(Pipe(700))
@@ -403,12 +403,12 @@ def main():
 
     # Calculo de aptitudes cuando mueren los pajaros y la evolucion
 
-            lista_aptitudes= [p.tiempo_vivo for p in pajaros]
-            algoritmo.aptitud(lista_aptitudes)
-            algoritmo.nueva_generacion()
+        lista_aptitudes= [p.tiempo_vivo for p in pajaros]
+        algoritmo.aptitud(lista_aptitudes)
+        algoritmo.nueva_generacion()
 
         # Cuando terminan las 6 generaciones
-        pygame.quit()
+    pygame.quit()
         
 if __name__ == "__main__":
     main()
