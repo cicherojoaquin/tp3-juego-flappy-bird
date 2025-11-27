@@ -14,6 +14,7 @@ pygame.mixer.music.set_volume(0.3)  # volumen bajo para no molestar!!!
 
 WIN_WIDTH = 576
 WIN_HEIGHT = 800
+PANEL_WIDTH = 280
 
 FOTOS_PAJAROS = [pygame.transform.scale2x(pygame.image.load(os.path.join('imgs', 'bird1.png'))),
                 pygame.transform.scale2x(pygame.image.load(os.path.join('imgs', 'bird2.png'))),
@@ -23,6 +24,7 @@ FOTO_TUBO = pygame.transform.scale2x(pygame.image.load(os.path.join('imgs', 'pip
 FOTO_PISO = pygame.transform.scale2x(pygame.image.load(os.path.join('imgs', 'base.png')))
 FOTO_FONDO = pygame.transform.scale2x(pygame.image.load(os.path.join('imgs', 'bg.png')))
 STAT_FONT= pygame.font.SysFont("Comicsans",50)
+PANEL_FONT = pygame.font.SysFont("Comicsans", 20)
 
 # Constantes del juego (enunciado)
 
@@ -190,9 +192,10 @@ class GenomaPajaro: # Con esto se hace el genoma del pajaro
         
         w0, w1, w2, w3, w4, w5 = self.pesos # Desempaqueta los 5 "genes" que tiene el pajaro y son los que van a evolucionar
         
-        ny = cambio_y / 10.0      # típicamente entre -1 y 1
-        nx = cambio_x / 10.0      # típicamente entre 0 y 1
-        vy = velocidad_y / 10.0    # típicamente entre -2 y 2 
+        #print(cambio_y)
+        ny = cambio_y / 100     # típicamente entre -1 y 1
+        nx = cambio_x / 100  # típicamente entre 0 y 1
+        vy = velocidad_y / 100 # Tipicamente entre -2 y 2 
 
         ny2 = ny * ny
         nx2 = nx * nx
@@ -207,7 +210,8 @@ class Algoritmo_Gen:
         self.rango_min = rango_min
         self.rango_max = rango_max 
         self.poblacion=[] # Lista que guarda los genomas de cada uno de los 100 pajaros [genoma1, genoma2.... genoma100]
-        self.generacion =0 # Esto va ser el contador de generaciones y empieza en 0
+        self.generacion =0 # Esto va ser el contador de generaciones y empieza en 0}
+        self.historial_fitness = []
     
     def poblacion_inicial(self): # Crea la primera poblacion, generacion 0
         self.poblacion=[]
@@ -220,8 +224,11 @@ class Algoritmo_Gen:
         limite= min(len(self.poblacion), len(lista_aptitudes))
         for i in range(limite): # Recorre la lista de pajaros 1 por 1 y le otorga la aptitud correspondiente
             self.poblacion[i].aptitud = lista_aptitudes[i]
+
+        if lista_aptitudes:
+            self.historial_fitness.append(max(lista_aptitudes))
     
-    def mas_aptos(self, n=10):
+    def mas_aptos(self, n=5):
         ordenados= sorted(self.poblacion, key=lambda genoma: genoma.aptitud, reverse= True) # Ordena la poblacion de pajaros del mas apto al menos apto (reverse) usando
         
         return ordenados[:n] # Devuelve la lista de diez pajaros con los mejores genomas
@@ -237,7 +244,7 @@ class Algoritmo_Gen:
         return GenomaPajaro(pesos=nuevos_pesos, rango_min=self.rango_min, rango_max=self.rango_max) # Devuelve el pajaro 'hijo' con el genoma nuevo
     
     def nueva_generacion(self):
-        mejores_10 =self.mas_aptos(n=10)
+        mejores_10 =self.mas_aptos(n=5)
         nueva_poblacion=[]
         for genoma in mejores_10:
             nueva_poblacion.append(genoma) # Agrega directamente los 10 mejores pajaros a la nueva poblacion}
@@ -267,8 +274,6 @@ class Algoritmo_Gen:
                 cambio= random.uniform(self.rango_min, self.rango_max) # El gen muta y es cualquier valor entre los rangos de w posibles
                 genoma.pesos[i]=cambio
 
-
-
 def crear_pajaros_desde_genomas(lista_genomas):
     "Esta funcion crea los pajaros con las condiciones anteriores"
     pajaros = []
@@ -277,9 +282,65 @@ def crear_pajaros_desde_genomas(lista_genomas):
 
     return pajaros
 
+def dibujar_panel(ventana, algoritmo, vivos, tiempo_actual):
+    # 1. Fondo del panel
+    pygame.draw.rect(ventana, (50, 50, 50), (WIN_WIDTH, 0, PANEL_WIDTH, WIN_HEIGHT))
+    pygame.draw.line(ventana, (255, 255, 255), (WIN_WIDTH, 0), (WIN_WIDTH, WIN_HEIGHT), 2)
+    
+    # Coordenadas base
+    x_base = WIN_WIDTH + 15
+    y_base = 20
+
+    # 2. Textos Estadísticos
+    # Titulo
+    t_obj = PANEL_FONT.render("Estadísticas GA", True, (255, 255, 255))
+    ventana.blit(t_obj, (x_base, y_base))
+    
+    mejor = 0
+    if algoritmo.historial_fitness:
+        mejor = max(algoritmo.historial_fitness)
+
+    info = [
+        f"Generacion: {algoritmo.generacion}",
+        f"Vivos: {vivos} / {algoritmo.tam_poblacion}",
+        f"Tiempo: {tiempo_actual:.1f}s",
+        f"Mejor Histórico: {mejor}"
+    ]
+
+    for i, texto in enumerate(info):
+        t_obj = PANEL_FONT.render(texto, True, (200, 200, 200))
+        ventana.blit(t_obj, (x_base, y_base + 40 + (i * 30)))
+
+    # 3. Gráfico de Progreso
+    y_grafico = 300
+    alto_grafico = 200
+    ancho_grafico = PANEL_WIDTH - 30
+    
+    # Caja del gráfico
+    rect_grafico = pygame.Rect(x_base, y_grafico, ancho_grafico, alto_grafico)
+    pygame.draw.rect(ventana, (20, 20, 20), rect_grafico)
+    pygame.draw.rect(ventana, (255, 255, 255), rect_grafico, 1)
+    
+    # Dibujar línea
+    historial = algoritmo.historial_fitness
+    if len(historial) > 1:
+        max_fit = max(historial)
+        if max_fit == 0: max_fit = 1
+        
+        puntos = []
+        for i, fit in enumerate(historial):
+            x_punto = x_base + (i / len(historial)) * ancho_grafico
+            y_punto = (y_grafico + alto_grafico) - (fit / max_fit) * alto_grafico
+            puntos.append((x_punto, y_punto))
+        
+        if len(puntos) >= 2:
+            if len(puntos) > ancho_grafico:
+                puntos = puntos[-int(ancho_grafico):]
+            pygame.draw.lines(ventana, (0, 255, 0), False, puntos, 2)
+
 def main():
     
-    ventana = pygame.display.set_mode((WIN_WIDTH, WIN_HEIGHT))
+    ventana = pygame.display.set_mode((WIN_WIDTH + PANEL_WIDTH, WIN_HEIGHT))
     tiempo= pygame.time.Clock()
     random.seed(0)
 
@@ -318,7 +379,7 @@ def main():
                     pygame.quit()
                     quit()
 
-      #  Tuberia para que los pajaros decidan si aletear o no       
+      #  Tuberia para que los pajaros decidan si aletear o no   
         
             pipe_obj = pipes[0] 
             vivos = 0
@@ -347,11 +408,7 @@ def main():
                 elif pajaro.y < 0:
                     pajaro.vivo = False
                 elif pipe_obj.collide(pajaro):
-                    pajaro.vivo = False
-            
-            if vivos == 0 or frames_generacion>= MAX_FRAMES:
-                generacion_terminada = True
-            
+                    pajaro.vivo = False 
         
             # Movimiento de tuberias 
 
@@ -375,6 +432,12 @@ def main():
             for pajaro in pajaros:
                 if pajaro.vivo:
                     pajaro.dibujar(ventana)
+                
+            tiempo_segundos = frames_generacion / FPS
+            dibujar_panel(ventana, algoritmo, vivos, tiempo_segundos)
+            
+            if vivos == 0 or frames_generacion>= MAX_FRAMES:
+                generacion_terminada = True
 
             pygame.display.update()
              
