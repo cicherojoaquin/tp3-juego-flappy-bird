@@ -33,35 +33,35 @@ PIPE_SPEED = 6 #velocidad con la que se mueven las tuberias y el piso
 FPS= 40 #seteo los frames por segundo
 MAX_TIME= 120 #el tiempo maximo al que puede llegar una generacion, si pasa esto se reinicia
 
-class Pajaro:
+class Pajaro:              # Primera clase para el objeto de los pajaros
     FOTOS = FOTOS_PAJAROS
-    ROTACION_MAX = 25
+    ROTACION_MAX = 25      # Estas constantes son para la animacion de rotacion de cuando baja y sube el pajaro
     VEL_ROTACION = 20
-    TIEMPO_ANIMADO = 5
+    TIEMPO_ANIMADO = 5      # Define cuanto tiempo va a estar cada uno de los 3 distintos frames del pajaro mientras vuela
 
     def __init__(self,x,y, genoma=None):
         self.x = x
         self.y = y #x,y posicion
         self.rotacion = 0 #angulo al dibujar, para que se incline al saltar y caer
-        self.conteo = 0
-        self.vel = 0
+        self.conteo = 0   # Lo vamos a usar para la animacion del salto
+        self.vel = 0      
         self.height = self.y
         self.img_count = 0
-        self.img = self.FOTOS[0]
+        self.img = self.FOTOS[0]  # Agarra la primer imagen (bird1.png)
         self.genoma = genoma #es el genoma, que decide cuando aletea y cuando no 
         self.vivo = True   #para saber cuando esta vivo y cuando no 
         self.tiempo_vivo = 0 # variable para saber cuanto lleva vivo
 
-    def saltar(self): 
-        self.vel = FLAP_STRENGTH #-10
-        self.conteo = 0
-        self.height = self.y 
+    def saltar(self):                 # Funcion que va hacer que el pajaro salte
+        self.vel = FLAP_STRENGTH #-10 # la velocidad es negativa en el eje y para que el pajaro vaya para arriba
+        self.conteo = 0               # Es un contador que guarda cuando fue la ultima vez que salto el pajaro
+        self.height = self.y          # Guarda donde es que el pajaro salto
 
     def move(self): #aplica la gravedad y va actualizando la posicion
         self.vel += GRAVITY      # +0.5 por frame
-        self.y += self.vel
+        self.y += self.vel       # La velocidad cambia la posicion del pajaro
 
-        if self.vel < 0 or self.y < self.height + 50:
+        if self.vel < 0 or self.y < self.height + 50:   # Define si el pajaro apunta hacia arriba o hacia abajo, depende si sube o baja
             if self.rotacion < self.ROTACION_MAX:
                 self.rotacion = self.ROTACION_MAX
 
@@ -70,27 +70,29 @@ class Pajaro:
                 self.rotacion -= self.VEL_ROTACION
 
     def dibujar(self,ventana): #le da la animacion al pajaro
-        self.img_count += 1
+        self.img_count += 1    # Cada vez que cambia un frame le suma 1
 
-        if self.img_count < self.TIEMPO_ANIMADO:
-            self.img = self.FOTOS[0]
+
+        if self.img_count < self.TIEMPO_ANIMADO:      #Va cambiando las imagenes de aleteo
+            self.img = self.FOTOS[0]                  # Alas para arriba
         elif self.img_count < self.TIEMPO_ANIMADO*2:
-            self.img = self.FOTOS[1]
+            self.img = self.FOTOS[1]                  # Alas en el medio
         elif self.img_count < self.TIEMPO_ANIMADO*3:
-            self.img = self.FOTOS[2]
+            self.img = self.FOTOS[2]                  # Alas para abajo
         elif self.img_count < self.TIEMPO_ANIMADO*4:
             self.img = self.FOTOS[1]
         elif self.img_count == self.TIEMPO_ANIMADO*4 +1:
             self.img = self.FOTOS[0]
-            self.img_count = 0
+            self.img_count = 0             # Repite la animacion
         
-        if self.rotacion <= -80:
+        if self.rotacion <= -80:                # Si el pajaro cae en picada hacia abajo, no se deben mover las alas
             self.img = self.FOTOS[1]
             self.img_count = self.TIEMPO_ANIMADO*2
         
-        imagen_rotada = pygame.transform.rotate(self.img, self.rotacion)
-        forma_nueva = imagen_rotada.get_rect(center=self.img.get_rect(topleft = (self.x, self.y)).center)
-        ventana.blit(imagen_rotada, forma_nueva.topleft)
+        imagen_rotada = pygame.transform.rotate(self.img, self.rotacion)   # Rota la imagen segun la rotacion del pajaro
+        forma_nueva = imagen_rotada.get_rect(center=self.img.get_rect(topleft = (self.x, self.y)).center)    # Vuelve a centrar la imagen para que no se desplace
+        ventana.blit(imagen_rotada, forma_nueva.topleft)           # Dibuja al pajaro en el ventana
+        
 
     def get_mask(self): #genera el mask para la collision, 
         return pygame.mask.from_surface(self.img)
