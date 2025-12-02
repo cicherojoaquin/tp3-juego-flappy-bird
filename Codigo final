@@ -188,7 +188,7 @@ class GenomaPajaro: # Con esto se hace el genoma del pajaro
         
         w0, w1, w2, w3, w4, w5 = self.pesos # Desempaqueta los 6 "genes" que tiene el pajaro y son los que van a evolucionar
         
-        #print(cambio_y)
+        
         ny = cambio_y / 100     #  entre -1 y 1
         nx = cambio_x / 100  #  entre 0 y 1
         vy = velocidad_y / 100     #todo normalizado
@@ -344,7 +344,7 @@ def main():
     algoritmo= Algoritmo_Gen() # Crea el algoritmo genetico 
     algoritmo.poblacion_inicial()
 
-    NUM_GENERACIONES = 100 #cuantas generaciones simular
+    NUM_GENERACIONES = 20 #cuantas generaciones simular
 
     speed_mult = 1  # velocidad en x1 al inicio 
     boton_rect = pygame.Rect(WIN_WIDTH - 110, 10, 100, 30)  # crea un boton arriba a la derecha del juego que tocas y la velocidad aumenta a x2
